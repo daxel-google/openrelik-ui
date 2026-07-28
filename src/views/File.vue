@@ -176,7 +176,7 @@ limitations under the License.
           <!-- Unsupported file message -->
           <div
             v-if="
-              (file.filesize > fileSizeLimit || !isTextFormat) && !isSqlFormat
+              (file.filesize > fileSizeLimit || (!isTextFormat && !isMarkdownFormat)) && !isSqlFormat
             "
             style="font-family: monospace; font-size: 0.9em"
             class="mt-2"
@@ -205,9 +205,29 @@ limitations under the License.
             ></file-summary>
           </div>
 
+          <!-- Markdown content -->
+          <v-card
+            v-if="isMarkdownFormat && file.filesize < fileSizeLimit"
+            variant="flat"
+            :style="{
+              height: `calc(100vh - 215px - ${AIisEnabled ? '80' : '25'}px)`,
+            }"
+            style="overflow: auto"
+            class="mt-4 pa-4 custom-border-color"
+          >
+            <div
+              v-if="!fileContentLoading"
+              class="markdown-content"
+              v-html="renderedMarkdown"
+            ></div>
+            <div v-else class="d-flex justify-center mt-5">
+              <v-progress-circular indeterminate color="primary"></v-progress-circular>
+            </div>
+          </v-card>
+
           <!-- File content -->
           <v-card
-            v-if="isTextFormat && file.filesize < fileSizeLimit"
+            v-if="isTextFormat && !isMarkdownFormat && file.filesize < fileSizeLimit"
             variant="flat"
             :style="{
               height: `calc(100vh - 215px - ${AIisEnabled ? '80' : '25'}px)`,
@@ -455,6 +475,8 @@ import FileChat from "@/components/FileChat.vue";
 import SqlTables from "@/components/SqlTables.vue";
 import settings from "@/settings";
 import { useUserSettings } from "@/composables/useUserSettings";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 export default {
   name: "File",
@@ -537,6 +559,18 @@ export default {
         magicText.includes("sqlite") || magicText.includes("duckdb");
       return containsSqlDb;
     },
+    isMarkdownFormat() {
+      return (
+        this.file.display_name.toLowerCase().endsWith(".md") ||
+        this.file.magic_mime === "text/markdown"
+      );
+    },
+    renderedMarkdown() {
+      if (this.fileContent) {
+        return DOMPurify.sanitize(marked(this.fileContent), { FORBID_TAGS: ["hr"] });
+      }
+      return "";
+    },
     allowedPreview() {
       // Render unescaped HTML content in sandboxed iframe if data_type is in server side
       // provided allowlist and magic_mime is text/html.
@@ -559,7 +593,7 @@ export default {
         return true;
       }
       // For other text-based files, we must check the size limit.
-      return this.isTextFormat && this.file.filesize < this.genAISizeLimit;
+      return (this.isTextFormat || this.isMarkdownFormat) && this.file.filesize < this.genAISizeLimit;
     },
     canGenerateSummary() {
       return (
@@ -669,6 +703,17 @@ export default {
         .then((response) => {
           this.file = response;
           this.generateFileSummary();
+          if (this.isMarkdownFormat && this.file.filesize < this.fileSizeLimit) {
+            this.fileContentLoading = true;
+            RestApiClient.getFileContent(this.fileId)
+              .then((contentResponse) => {
+                this.fileContent = contentResponse;
+                this.fileContentLoading = false;
+              })
+              .catch(() => {
+                this.fileContentLoading = false;
+              });
+          }
           if (this.isSqlFormat) {
             RestApiClient.getSQLSchemas(this.fileId)
               .then((response) => {
