@@ -383,7 +383,18 @@ export default {
   },
   async getFileContent(fileId) {
     return new Promise((resolve, reject) => {
-      RestApiClient.get("/files/" + fileId + "/content/")
+      RestApiClient.get("/files/" + fileId + "/content")
+        .then((response) => {
+          resolve(response.data);
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
+  },
+  async downloadFile(fileId) {
+    return new Promise((resolve, reject) => {
+      RestApiClient.get("/files/" + fileId + "/download")
         .then((response) => {
           resolve(response.data);
         })
