@@ -561,13 +561,14 @@ export default {
     },
     isMarkdownFormat() {
       return (
-        this.file.display_name.toLowerCase().endsWith(".md") ||
-        this.file.magic_mime === "text/markdown"
+        this.isTextFormat &&
+        (this.file.display_name.toLowerCase().endsWith(".md") ||
+          this.file.magic_mime === "text/markdown")
       );
     },
     renderedMarkdown() {
       if (this.fileContent) {
-        return DOMPurify.sanitize(marked(this.fileContent), { FORBID_TAGS: ["hr"] });
+        return DOMPurify.sanitize(marked.parse(this.fileContent), { FORBID_TAGS: ["hr"] });
       }
       return "";
     },
@@ -705,7 +706,7 @@ export default {
           this.generateFileSummary();
           if (this.isMarkdownFormat && this.file.filesize < this.fileSizeLimit) {
             this.fileContentLoading = true;
-            RestApiClient.getFileContent(this.fileId)
+            RestApiClient.downloadFile(this.fileId)
               .then((contentResponse) => {
                 this.fileContent = contentResponse;
                 this.fileContentLoading = false;
